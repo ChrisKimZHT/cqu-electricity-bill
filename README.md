@@ -1,10 +1,6 @@
 # 重庆大学宿舍电费监控（虎溪）
 
-> [!IMPORTANT]
->
-> 本项目仅存活半个月就被学校系统升级干坏了，目前无法正常登录，等待后续修复。如果你能帮忙修复，欢迎提交 PR 喵！
-
-定时登录重庆大学缴费平台，抓取宿舍电费余额和电表累计读数，可生成用电图表，并通过 SMTP 邮件定时发送当前电费情况。
+使用重庆大学缴费平台令牌，定时抓取宿舍电费余额和电表累计读数，可生成用电图表，并通过 SMTP 邮件定时发送当前电费情况。
 
 <img src="screenshot.png" width="400">
 
@@ -13,14 +9,19 @@
 复制 `.env.example` 为 `.env` 后进行编辑。完整配置和说明见 [.env.example](.env.example)，核心配置为：
 
 ```dotenv
-CQU_ACCOUNT=你的学号
-CQU_PASSWORD=你的查询密码
+SYNJONES_AUTH=access_token
 CQU_ROOM=D1102
 CQU_BUILDING=兰园1栋
 SCHEDULE_TIME=12:00            # 每日抓取时间
 EMAIL_ENABLED=true             # 电费邮件通知
 BALANCE_WARNING_ENABLED=true   # 余额不足警告
 ```
+
+## 获取 Token
+
+1. 在桌面端浏览器打开[缴费大厅](http://payment.cqu.edu.cn/plat/shouyeUser)，完成统一认证登录。
+2. 按 F12 启动浏览器开发者工具，在控制台（Console）中执行 `sessionStorage.getItem('access_token')`，复制输出的令牌内容。
+3. 将令牌填入 `.env` 的 `SYNJONES_AUTH` 即可，令牌过期后需重新获取，当前系统设置的有效期为两个月。
 
 ## 直接运行
 
@@ -57,7 +58,3 @@ docker run -d \
   -v "${PWD}/data:/data" \
   cqu-electricity-bill
 ```
-
-## 关于贡献
-
-欢迎在 Issue 中提出问题或建议，或通过 Pull Request 贡献代码，包括 AI 生成的代码。当前项目还缺少重庆大学 A/B/C 区的宿舍电费监控功能，欢迎贡献。
