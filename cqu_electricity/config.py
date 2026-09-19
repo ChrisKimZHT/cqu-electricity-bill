@@ -88,15 +88,12 @@ def _email_schedule(raw: str) -> str:
 
 @dataclass(frozen=True, slots=True)
 class Settings:
-    account: str
-    password: str
     room: str
     building: str | None
     schedule_time: str
     timezone: ZoneInfo
     data_dir: Path
     request_timeout: int
-    login_retries: int
     log_level: str
     email_enabled: bool
     email_schedule: str
@@ -110,9 +107,9 @@ class Settings:
     smtp_starttls: bool
     smtp_timeout: int
     email_subject_prefix: str
-    portal_url: str
     electricity_url: str
     fee_item_id: str
+    synjones_auth: str
     electricity_price: Decimal = DEFAULT_ELECTRICITY_PRICE
     balance_warning_enabled: bool = False
     balance_warning_threshold: Decimal = Decimal("10")
@@ -133,8 +130,6 @@ class Settings:
             raise ConfigError(f"未知时区 TIMEZONE={timezone_name!r}") from exc
 
         return cls(
-            account=_required("CQU_ACCOUNT"),
-            password=_required("CQU_PASSWORD"),
             room=_required("CQU_ROOM").upper(),
             building=os.getenv("CQU_BUILDING", "").strip() or None,
             schedule_time=_schedule_time(
@@ -144,7 +139,6 @@ class Settings:
             timezone=timezone,
             data_dir=Path(os.getenv("DATA_DIR", ".")).expanduser(),
             request_timeout=_positive_int("REQUEST_TIMEOUT", 20),
-            login_retries=_positive_int("LOGIN_RETRIES", 8),
             log_level=os.getenv("LOG_LEVEL", "INFO").strip().upper(),
             email_enabled=_boolean("EMAIL_ENABLED", False),
             email_schedule=_email_schedule(
@@ -166,12 +160,12 @@ class Settings:
             email_subject_prefix=os.getenv(
                 "EMAIL_SUBJECT_PREFIX", "电费监控"
             ).strip(),
-            portal_url=os.getenv("PORTAL_URL", "http://card.cqu.edu.cn").rstrip("/"),
             electricity_url=os.getenv(
                 "ELECTRICITY_URL",
-                "http://card.cqu.edu.cn:8080/charge/feeitem/singleItem?feeitemid=182",
+                "http://payment.cqu.edu.cn/charge-app/#/pays?id=448",
             ).strip(),
-            fee_item_id=os.getenv("FEE_ITEM_ID", "182").strip(),
+            fee_item_id=os.getenv("FEE_ITEM_ID", "448").strip(),
+            synjones_auth=_required("SYNJONES_AUTH"),
             electricity_price=_electricity_price(),
             balance_warning_enabled=_boolean("BALANCE_WARNING_ENABLED", False),
             balance_warning_threshold=_balance_warning_threshold(),
