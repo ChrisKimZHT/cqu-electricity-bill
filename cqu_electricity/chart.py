@@ -100,17 +100,15 @@ def draw_history_chart(
 
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
+    from matplotlib import font_manager
 
     points = load_daily_points(history_path, room, days=14, electricity_price=electricity_price)
     labels = [point.day.strftime("%m-%d") for point in points]
     positions = list(range(len(points)))
 
-    plt.rcParams["font.sans-serif"] = [
-        "Microsoft YaHei",
-        "SimHei",
-        "Noto Sans CJK SC",
-        "DejaVu Sans",
-    ]
+    font_path = Path(__file__).resolve().parent.parent / "SourceHanSansCN-Bold.ttf"
+    font_manager.fontManager.addfont(str(font_path))
+    plt.rcParams["font.family"] = font_manager.FontProperties(fname=font_path).get_name()
     plt.rcParams["axes.unicode_minus"] = False
     plt.rcParams["text.color"] = "black"
     plt.rcParams["axes.labelcolor"] = "black"

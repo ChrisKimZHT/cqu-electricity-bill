@@ -11,12 +11,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates \
-        fontconfig \
-        fonts-noto-cjk \
-        libgl1 \
-        libglib2.0-0 \
         tzdata \
-    && fc-cache -fv \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -25,6 +20,7 @@ COPY requirements.txt ./
 RUN python -m pip install --no-cache-dir -r requirements.txt
 
 COPY cqu_electricity ./cqu_electricity
+COPY SourceHanSansCN-Bold.ttf ./SourceHanSansCN-Bold.ttf
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
 RUN useradd --create-home --uid 10001 appuser \
