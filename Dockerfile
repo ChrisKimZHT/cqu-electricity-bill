@@ -5,7 +5,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     MPLBACKEND=Agg \
     MPLCONFIGDIR=/app/.cache/matplotlib \
-    DATA_DIR=/data \
+    DOCKER_MODE=true \
     TZ=Asia/Shanghai
 
 RUN apt-get update \
@@ -20,16 +20,14 @@ COPY requirements.txt ./
 RUN python -m pip install --no-cache-dir -r requirements.txt
 
 COPY cqu_electricity ./cqu_electricity
-COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
 RUN useradd --create-home --uid 10001 appuser \
     && mkdir -p /app/.cache/matplotlib /data \
-    && chmod 755 /usr/local/bin/docker-entrypoint.sh \
     && chown -R appuser:appuser /app /data
 
 USER appuser
 
 VOLUME ["/data"]
 
-ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+ENTRYPOINT ["python", "-m", "cqu_electricity"]
 CMD ["daemon"]

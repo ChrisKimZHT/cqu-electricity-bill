@@ -26,7 +26,7 @@ def _parser() -> argparse.ArgumentParser:
         help="单次抓取、定时常驻、生成图表或按已有数据发送邮件",
     )
     parser.add_argument("--env-file", default=".env", help="环境变量文件，默认 .env")
-    parser.add_argument("--output", help="图表输出路径，默认 DATA_DIR/history.png")
+    parser.add_argument("--output", help="图表输出路径，默认数据目录下的 history.png")
     return parser
 
 

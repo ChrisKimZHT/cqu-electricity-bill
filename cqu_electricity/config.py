@@ -137,7 +137,11 @@ class Settings:
                 "SCHEDULE_TIME",
             ),
             timezone=timezone,
-            data_dir=Path(os.getenv("DATA_DIR", ".")).expanduser(),
+            data_dir=(
+                Path("/data")
+                if _boolean("DOCKER_MODE")
+                else Path(os.getenv("DATA_DIR", ".")).expanduser()
+            ),
             request_timeout=_positive_int("REQUEST_TIMEOUT", 20),
             log_level=os.getenv("LOG_LEVEL", "INFO").strip().upper(),
             email_enabled=_boolean("EMAIL_ENABLED", False),
