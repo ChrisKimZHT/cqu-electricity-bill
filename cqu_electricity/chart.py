@@ -106,9 +106,10 @@ def draw_history_chart(
     labels = [point.day.strftime("%m-%d") for point in points]
     positions = list(range(len(points)))
 
-    font_path = Path(__file__).resolve().parent.parent / "SourceHanSansCN-Bold.ttf"
+    font_path = Path(__file__).resolve().parent / "fonts" / "SourceHanSansCN-Normal.ttf"
     font_manager.fontManager.addfont(str(font_path))
     plt.rcParams["font.family"] = font_manager.FontProperties(fname=font_path).get_name()
+    plt.rcParams["font.weight"] = "normal"
     plt.rcParams["axes.unicode_minus"] = False
     plt.rcParams["text.color"] = "black"
     plt.rcParams["axes.labelcolor"] = "black"

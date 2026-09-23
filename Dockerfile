@@ -20,7 +20,6 @@ COPY requirements.txt ./
 RUN python -m pip install --no-cache-dir -r requirements.txt
 
 COPY cqu_electricity ./cqu_electricity
-COPY SourceHanSansCN-Bold.ttf ./SourceHanSansCN-Bold.ttf
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
 RUN useradd --create-home --uid 10001 appuser \
