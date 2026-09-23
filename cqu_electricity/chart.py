@@ -20,6 +20,8 @@ class DailyPoint:
     day: date
     usage_kwh: float
     balance_yuan: float
+    usage_estimated: bool = False
+    balance_estimated: bool = False
 
 
 def _decimal(raw: str, field: str, line_number: int) -> Decimal:
@@ -71,18 +73,44 @@ def load_daily_points(
 
     end_day = max(latest_by_day)
     start_day = end_day - timedelta(days=days - 1)
-    points: list[DailyPoint] = []
+    usage_by_day: dict[date, tuple[float, bool]] = {}
+    balance_by_day: dict[date, tuple[float, bool]] = {}
     for offset in range(days):
         current_day = start_day + timedelta(days=offset)
         current = latest_by_day.get(current_day)
         previous = latest_by_day.get(current_day - timedelta(days=1))
-        balance_value = float(current[2]) if current else math.nan
-        usage_value = math.nan
+        if current:
+            balance_by_day[current_day] = (float(current[2]), False)
         if current and previous:
             usage = current[1] - previous[1]
             if usage >= 0:
-                usage_value = float(usage)
-        points.append(DailyPoint(current_day, usage_value, balance_value))
+                usage_by_day[current_day] = (float(usage), False)
+
+    sampled_days = sorted(day for day in latest_by_day if start_day <= day <= end_day)
+    for first_day, last_day in zip(sampled_days, sampled_days[1:]):
+        gap_days = (last_day - first_day).days
+        if gap_days == 1:
+            continue
+        first_meter = latest_by_day[first_day][1]
+        last_meter = latest_by_day[last_day][1]
+        if last_meter >= first_meter:
+            average_usage = float((last_meter - first_meter) / gap_days)
+            for offset in range(1, gap_days + 1):
+                usage_by_day[first_day + timedelta(days=offset)] = (average_usage, True)
+
+        first_balance = latest_by_day[first_day][2]
+        last_balance = latest_by_day[last_day][2]
+        for offset in range(1, gap_days):
+            missing_day = first_day + timedelta(days=offset)
+            interpolated = first_balance + (last_balance - first_balance) * offset / gap_days
+            balance_by_day[missing_day] = (float(interpolated), True)
+
+    points: list[DailyPoint] = []
+    for offset in range(days):
+        day = start_day + timedelta(days=offset)
+        usage, usage_estimated = usage_by_day.get(day, (math.nan, False))
+        balance, balance_estimated = balance_by_day.get(day, (math.nan, False))
+        points.append(DailyPoint(day, usage, balance, usage_estimated, balance_estimated))
     return points
 
 
@@ -101,6 +129,7 @@ def draw_history_chart(
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     from matplotlib import font_manager
+    from matplotlib.lines import Line2D
 
     points = load_daily_points(history_path, room, days=14, electricity_price=electricity_price)
     labels = [point.day.strftime("%m-%d") for point in points]
@@ -122,7 +151,7 @@ def draw_history_chart(
         positions,
         [point.usage_kwh for point in points],
         width=0.62,
-        color="#1f77b4",
+        color=["#b0b0b0" if point.usage_estimated else "#1f77b4" for point in points],
         label="每日用电量",
         zorder=2,
     )
@@ -136,9 +165,17 @@ def draw_history_chart(
     usage_axis.yaxis.set_label_position("right")
     balance_axis.yaxis.tick_left()
     balance_axis.yaxis.set_label_position("left")
+    balances = [point.balance_yuan for point in points]
+    balance_axis.plot(
+        positions,
+        balances,
+        color="#666666",
+        linewidth=2.2,
+        zorder=3,
+    )
     line = balance_axis.plot(
         positions,
-        [point.balance_yuan for point in points],
+        [point.balance_yuan if not point.balance_estimated else math.nan for point in points],
         color="#ff7f0e",
         linewidth=2.2,
         marker="o",
@@ -146,6 +183,15 @@ def draw_history_chart(
         label="余额",
         zorder=3,
     )[0]
+    balance_axis.plot(
+        positions,
+        [point.balance_yuan if point.balance_estimated else math.nan for point in points],
+        color="#666666",
+        linestyle="None",
+        marker="o",
+        markersize=5,
+        zorder=4,
+    )
     balance_axis.set_ylabel("余额（元）", color="black")
     balance_axis.tick_params(axis="y", colors="black")
 
@@ -164,7 +210,8 @@ def draw_history_chart(
         )
 
     usage_axis.set_title(f"{room} 最近14天用电情况")
-    usage_axis.legend([bars, line], ["每日用电量", "余额"], loc="upper left")
+    estimated = Line2D([], [], color="#666666", marker="o", label="估算值")
+    usage_axis.legend([bars, line, estimated], ["每日用电量", "余额", "估算值"], loc="upper left")
     figure.tight_layout()
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
