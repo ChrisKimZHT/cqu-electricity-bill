@@ -115,6 +115,7 @@ class Settings:
     electricity_price: Decimal = DEFAULT_ELECTRICITY_PRICE
     balance_warning_enabled: bool = False
     balance_warning_threshold: Decimal = Decimal("10")
+    token_expiry_warning_enabled: bool = True
 
     @property
     def fee_item_id(self) -> str:
@@ -179,4 +180,5 @@ class Settings:
             electricity_price=_electricity_price(),
             balance_warning_enabled=_boolean("BALANCE_WARNING_ENABLED", False),
             balance_warning_threshold=_balance_warning_threshold(),
+            token_expiry_warning_enabled=_boolean("TOKEN_EXPIRY_WARNING_ENABLED", True),
         )

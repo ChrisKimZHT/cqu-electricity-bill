@@ -162,6 +162,25 @@ def send_electricity_email(
 ) -> None:
     validate_email_settings(settings)
     message = _message(settings, reading, chart_path)
+    _send_message(settings, message)
+
+
+def send_token_expired_email(settings: Settings) -> None:
+    """401 时立即提醒更新令牌，不依赖历史数据或图表。"""
+    validate_email_settings(settings)
+    message = EmailMessage()
+    message["Subject"] = f"[{settings.email_subject_prefix}] {settings.room} 登录令牌过期（401）"
+    message["From"] = settings.smtp_from
+    message["To"] = ", ".join(settings.smtp_to)
+    message.set_content(
+        f"缴费平台查询房间 {settings.room} 时返回 401，当前令牌可能已过期。\n"
+        "请重新登录缴费大厅，获取新的 access_token，并更新 .env 中的 SYNJONES_AUTH。\n"
+        "令牌更新前，后续电费抓取可能继续失败。\n"
+    )
+    _send_message(settings, message)
+
+
+def _send_message(settings: Settings, message: EmailMessage) -> None:
     context = ssl.create_default_context()
     try:
         if settings.smtp_use_ssl:

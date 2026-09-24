@@ -9,10 +9,15 @@ from pathlib import Path
 from apscheduler.schedulers.blocking import BlockingScheduler
 from loguru import logger
 
-from .client import CquElectricityClient, CquError
+from .client import CquElectricityClient, CquError, TokenExpiredError
 from .chart import ChartError, draw_history_chart
 from .config import ConfigError, Settings
-from .mailer import EmailError, send_electricity_email, validate_email_settings
+from .mailer import (
+    EmailError,
+    send_electricity_email,
+    send_token_expired_email,
+    validate_email_settings,
+)
 from .models import MeterReading
 from .schedule import daily_trigger, email_trigger
 from .storage import CsvStore
@@ -60,6 +65,10 @@ def _job(settings: Settings) -> Callable[[], None]:
                 f"{reading.total_balance_yuan(settings.electricity_price):.2f}",
                 f"{reading.meter_reading_kwh} kWh" if reading.meter_reading_kwh is not None else "未提供",
             )
+        except TokenExpiredError as exc:
+            logger.error("电费抓取失败：{}", exc)
+            _notify_token_expired(settings)
+            return
         except Exception:
             logger.exception("电费抓取失败")
             return
@@ -98,6 +107,17 @@ def _warn_low_balance(settings: Settings, reading: MeterReading) -> None:
     if balance < settings.balance_warning_threshold:
         logger.warning("余额 {} 元低于阈值 {} 元，正在发送邮件", balance, settings.balance_warning_threshold)
         _deliver_email(settings, reading)
+
+
+def _notify_token_expired(settings: Settings) -> None:
+    if not settings.token_expiry_warning_enabled:
+        return
+    try:
+        send_token_expired_email(settings)
+    except Exception:
+        logger.exception("令牌过期提醒邮件发送失败")
+    else:
+        logger.info("令牌过期提醒已发送至：{}", ", ".join(settings.smtp_to))
 
 
 def main() -> int:
@@ -142,6 +162,10 @@ def main() -> int:
         try:
             reading = CquElectricityClient(settings).fetch()
             CsvStore(settings.data_dir).save(reading)
+        except TokenExpiredError as exc:
+            logger.error("抓取失败：{}", exc)
+            _notify_token_expired(settings)
+            return 1
         except CquError as exc:
             logger.error("抓取失败：{}", exc)
             return 1

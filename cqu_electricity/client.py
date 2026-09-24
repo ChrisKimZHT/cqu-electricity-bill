@@ -20,6 +20,10 @@ class CquError(RuntimeError):
     """抓取流程出现可说明的错误。"""
 
 
+class TokenExpiredError(CquError):
+    """缴费平台拒绝令牌（401）。"""
+
+
 class ParseError(CquError):
     pass
 
@@ -51,8 +55,16 @@ class CquElectricityClient:
     def _request(self, method: str, url: str, **kwargs: Any) -> requests.Response:
         kwargs.setdefault("timeout", self.settings.request_timeout)
         response = self.session.request(method, url, **kwargs)
+        if response.status_code == 401:
+            raise TokenExpiredError("缴费平台返回 HTTP 401，请更新 SYNJONES_AUTH")
         response.raise_for_status()
         return response
+
+    def _request_json(self, method: str, url: str, **kwargs: Any) -> dict[str, Any]:
+        result = self._request(method, url, **kwargs).json()
+        if isinstance(result, dict) and str(result.get("code")) == "401":
+            raise TokenExpiredError("缴费平台返回 401，请更新 SYNJONES_AUTH")
+        return result
 
     def fetch(self) -> MeterReading:
         self._set_charge_token(self.settings.synjones_auth)
@@ -91,9 +103,9 @@ class CquElectricityClient:
 
     def _query_room(self) -> tuple[dict[str, Any], str]:
         base = {"feeitemid": self.settings.fee_item_id}
-        initial = self._request(
+        initial = self._request_json(
             "POST", QUERY_URL, data={**base, "type": "select", "level": 0}
-        ).json()
+        )
         initial_map = initial.get("map") or {}
         levels = initial_map.get("total") or []
         buildings = initial_map.get("data") or []
@@ -110,7 +122,7 @@ class CquElectricityClient:
         matched_room: dict[str, Any] | None = None
         matched_building: dict[str, Any] | None = None
         for building in building_candidates:
-            rooms_result = self._request(
+            rooms_result = self._request_json(
                 "POST",
                 QUERY_URL,
                 data={
@@ -119,7 +131,7 @@ class CquElectricityClient:
                     "level": 1,
                     building_code: building["value"],
                 },
-            ).json()
+            )
             rooms = (rooms_result.get("map") or {}).get("data") or []
             matched_room = next(
                 (
@@ -138,7 +150,7 @@ class CquElectricityClient:
             building_text = self.settings.building or "自动识别的宿舍楼"
             raise CquError(f"{building_text} 中找不到房间 {self.settings.room}")
 
-        final = self._request(
+        final = self._request_json(
             "POST",
             QUERY_URL,
             data={
@@ -148,7 +160,7 @@ class CquElectricityClient:
                 building_code: matched_building["value"],
                 room_code: matched_room["value"],
             },
-        ).json()
+        )
         final_map = final.get("map") or {}
         if final.get("code") != 200 or not final_map.get("showData"):
             raise CquError(f"电费查询失败：{final.get('msg') or final}")
