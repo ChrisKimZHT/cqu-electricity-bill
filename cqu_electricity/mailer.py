@@ -48,26 +48,25 @@ def _message(settings: Settings, reading: MeterReading, chart_path: Path) -> Ema
         if reading.subsidy_balance_yuan is not None and reading.unit_price_yuan_per_kwh is not None
         else "最近14天用电情况" if reading.meter_reading_kwh is not None else "最近14天电费余额"
     )
-    meter_row = (
-        f'<tr><td style="padding:13px 16px;background:#f8fafc;color:#64748b;">电表累计读数</td>'
-        f'<td style="padding:13px 16px;font-weight:600;">{safe(reading.meter_reading_kwh)} 度</td></tr>'
-        if reading.meter_reading_kwh is not None else ""
-    )
-    subsidy_row = (
-        f'<tr><td style="padding:13px 16px;background:#f8fafc;color:#64748b;">剩余电补助</td>'
-        f'<td style="padding:13px 16px;font-weight:600;">{safe(reading.subsidy_kwh)} 度</td></tr>'
-        if reading.subsidy_kwh is not None else ""
-    )
-    subsidy_balance_row = (
-        f'<tr><td style="padding:13px 16px;background:#f8fafc;color:#64748b;">补贴余额</td>'
-        f'<td style="padding:13px 16px;font-weight:600;">{safe(reading.subsidy_balance_yuan)} 元</td></tr>'
-        if reading.subsidy_balance_yuan is not None else ""
-    )
-    address_row = (
-        f'<tr><td style="padding:13px 16px;background:#f8fafc;color:#64748b;">电表地址</td>'
-        f'<td style="padding:13px 16px;font-weight:600;">{safe(reading.meter_address)}</td></tr>'
-        if reading.meter_address else ""
-    )
+    detail_rows = [(cash_label, f"{safe(reading.balance_yuan)} 元")]
+    if reading.meter_reading_kwh is not None:
+        detail_rows.append(("电表累计读数", f"{safe(reading.meter_reading_kwh)} 度"))
+    if reading.subsidy_kwh is not None:
+        detail_rows.append(("剩余电补助", f"{safe(reading.subsidy_kwh)} 度"))
+    if reading.subsidy_balance_yuan is not None:
+        detail_rows.append(("补贴余额", f"{safe(reading.subsidy_balance_yuan)} 元"))
+    if reading.meter_address:
+        detail_rows.append(("电表地址", safe(reading.meter_address)))
+    detail_row_html = []
+    for index, (label, value) in enumerate(detail_rows):
+        border = "border-bottom:1px solid #e5e7eb;" if index < len(detail_rows) - 1 else ""
+        detail_row_html.append(
+            '<tr>'
+            f'<td style="padding:13px 16px;background:#f8fafc;color:#64748b;{border}">{label}</td>'
+            f'<td style="padding:13px 16px;font-weight:600;{border}">{value}</td>'
+            '</tr>'
+        )
+    detail_rows_html = "\n".join(detail_row_html)
     html_body = f"""\
 <!doctype html>
 <html lang="zh-CN">
@@ -110,14 +109,7 @@ def _message(settings: Settings, reading: MeterReading, chart_path: Path) -> Ema
                 <div style="margin-bottom:12px;font-size:17px;font-weight:700;color:#111827;">当前电费情况</div>
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
                        style="border-collapse:separate;border-spacing:0;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;font-size:14px;">
-                  <tr>
-                    <td style="padding:13px 16px;background:#f8fafc;color:#64748b;border-bottom:1px solid #e5e7eb;">{cash_label}</td>
-                    <td style="padding:13px 16px;font-weight:600;border-bottom:1px solid #e5e7eb;">{safe(reading.balance_yuan)} 元</td>
-                  </tr>
-                  {meter_row}
-                  {subsidy_row}
-                  {subsidy_balance_row}
-                  {address_row}
+                  {detail_rows_html}
                 </table>
               </td>
             </tr>
