@@ -55,10 +55,10 @@ def _job(settings: Settings) -> Callable[[], None]:
             reading = CquElectricityClient(settings).fetch()
             store.save(reading)
             logger.info(
-                "抓取成功：房间={} 余额={} 元 电表读数={} kWh",
+                "抓取成功：房间={} 余额={} 元 电表读数={}",
                 reading.room,
                 f"{reading.total_balance_yuan(settings.electricity_price):.2f}",
-                reading.meter_reading_kwh,
+                f"{reading.meter_reading_kwh} kWh" if reading.meter_reading_kwh is not None else "未提供",
             )
         except Exception:
             logger.exception("电费抓取失败")
@@ -74,7 +74,7 @@ def _job(settings: Settings) -> Callable[[], None]:
 def _email_job(settings: Settings) -> Callable[[], None]:
     def run() -> None:
         try:
-            reading = CsvStore(settings.data_dir).latest()
+            reading = CsvStore(settings.data_dir).latest(settings.room)
             _deliver_email(settings, reading)
         except Exception:
             logger.exception("定时邮件发送失败")
@@ -149,10 +149,10 @@ def main() -> int:
             logger.exception("抓取失败")
             return 1
         logger.info(
-            "抓取成功：房间={} 余额={} 元 电表读数={} kWh",
+            "抓取成功：房间={} 余额={} 元 电表读数={}",
             reading.room,
             f"{reading.total_balance_yuan(settings.electricity_price):.2f}",
-            reading.meter_reading_kwh,
+            f"{reading.meter_reading_kwh} kWh" if reading.meter_reading_kwh is not None else "未提供",
         )
         try:
             _warn_low_balance(settings, reading)
@@ -163,7 +163,7 @@ def main() -> int:
 
     if args.command == "email":
         try:
-            _deliver_email(settings, CsvStore(settings.data_dir).latest())
+            _deliver_email(settings, CsvStore(settings.data_dir).latest(settings.room))
         except (ChartError, EmailError, FileNotFoundError, ValueError) as exc:
             logger.error("邮件发送失败：{}", exc)
             return 1

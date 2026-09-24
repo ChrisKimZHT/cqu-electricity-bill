@@ -5,12 +5,16 @@ from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from html import unescape
 from typing import Any
-from urllib.parse import urlparse
 
 import requests
 
 from .config import Settings
 from .models import MeterReading
+
+
+CHARGE_HOST = "payment.cqu.edu.cn"
+QUERY_URL = f"http://{CHARGE_HOST}/charge/feeitem/getThirdData"
+
 
 class CquError(RuntimeError):
     """抓取流程出现可说明的错误。"""
@@ -52,10 +56,10 @@ class CquElectricityClient:
 
     def fetch(self) -> MeterReading:
         self._set_charge_token(self.settings.synjones_auth)
-        public = urlparse(self.settings.electricity_url)
-        query_url = f"{public.scheme}://{public.netloc}/charge/feeitem/getThirdData"
-        result, building_name = self._query_room(query_url)
+        result, building_name = self._query_room()
         response_map = result.get("map") or {}
+        if self.settings.campus == "shapingba":
+            return self._extract_shapingba(response_map, building_name)
         combined = {
             **(response_map.get("data") or {}),
             **(response_map.get("showData") or {}),
@@ -64,10 +68,31 @@ class CquElectricityClient:
         }
         return self._extract_json(combined)
 
-    def _query_room(self, query_url: str) -> tuple[dict[str, Any], str]:
+    def _extract_shapingba(self, response_map: dict[str, Any], building_name: str) -> MeterReading:
+        data = response_map.get("data") or {}
+        display = response_map.get("showData") or {}
+        account = str(data.get("roomID") or "").strip().upper()
+        if account != self.settings.room:
+            raise ParseError(f"接口返回的房间账号 {account!r} 与 CQU_ROOM 不一致")
+
+        cash = data.get("cashBalance", display.get("现金余额"))
+        subsidy = data.get("subsidiesBalance", display.get("补贴余额"))
+        price = _number(data.get("price", display.get("电价")), "电价")
+        if price <= 0:
+            raise ParseError("接口返回的电价必须大于 0")
+        return MeterReading(
+            captured_at=datetime.now(self.settings.timezone),
+            room=account,
+            building=building_name,
+            balance_yuan=_number(cash, "现金余额"),
+            subsidy_balance_yuan=_number(subsidy, "补贴余额"),
+            unit_price_yuan_per_kwh=price,
+        )
+
+    def _query_room(self) -> tuple[dict[str, Any], str]:
         base = {"feeitemid": self.settings.fee_item_id}
         initial = self._request(
-            "POST", query_url, data={**base, "type": "select", "level": 0}
+            "POST", QUERY_URL, data={**base, "type": "select", "level": 0}
         ).json()
         initial_map = initial.get("map") or {}
         levels = initial_map.get("total") or []
@@ -87,7 +112,7 @@ class CquElectricityClient:
         for building in building_candidates:
             rooms_result = self._request(
                 "POST",
-                query_url,
+                QUERY_URL,
                 data={
                     **base,
                     "type": "select",
@@ -115,7 +140,7 @@ class CquElectricityClient:
 
         final = self._request(
             "POST",
-            query_url,
+            QUERY_URL,
             data={
                 **base,
                 "type": "IEC",
@@ -129,7 +154,29 @@ class CquElectricityClient:
             raise CquError(f"电费查询失败：{final.get('msg') or final}")
         return final, str(matched_building.get("name") or matched_building["value"])
 
+    def _shapingba_building_candidates(self, buildings: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        if self.settings.building:
+            wanted = self.settings.building.strip().lower()
+            return [
+                item for item in buildings
+                if wanted == str(item.get("name", "")).strip().lower()
+                or wanted == str(item.get("value", "")).strip().lower()
+            ]
+
+        match = re.fullmatch(r"([ABC])(\d{1,2})S[A-Z0-9]+", self.settings.room)
+        if not match:
+            return []
+        area, number = match.groups()
+        prefix = re.compile(rf"^{area}区{int(number)}(?:号|舍)")
+        return [
+            item for item in buildings
+            if prefix.match(str(item.get("name", "")))
+            and "宿舍" in str(item.get("name", ""))
+        ]
+
     def _building_candidates(self, buildings: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        if self.settings.campus == "shapingba":
+            return self._shapingba_building_candidates(buildings)
         if self.settings.building:
             wanted = self.settings.building.strip().lower()
             return [
@@ -161,12 +208,11 @@ class CquElectricityClient:
         return preferred + fallback
 
     def _set_charge_token(self, token: str) -> None:
-        public = urlparse(self.settings.electricity_url)
         authorization = f"bearer {token.removeprefix('bearer ').removeprefix('Bearer ')}"
         self.session.headers["synjones-auth"] = authorization
         self.session.headers["Authorization"] = "Basic Y2hhcmdlOmNoYXJnZV9zZWNyZXQ="
         # 网页端也把令牌写入 /charge 路径 Cookie；一并设置以兼容不同版本。
-        self.session.cookies.set("synjones-auth", authorization, domain=public.hostname, path="/charge")
+        self.session.cookies.set("synjones-auth", authorization, domain=CHARGE_HOST, path="/charge")
 
     def _extract_json(self, data: Any) -> MeterReading:
         candidates: list[dict[str, Any]] = []

@@ -1,4 +1,4 @@
-# 重庆大学虎溪校区宿舍电费监控
+# 重庆大学宿舍电费监控
 
 使用重庆大学缴费平台令牌，定时抓取宿舍电费余额和电表累计读数，可生成用电图表，并通过 SMTP 邮件定时发送当前电费情况。
 
@@ -16,6 +16,7 @@
 
 ```dotenv
 SYNJONES_AUTH=access_token
+CQU_CAMPUS=huxi
 CQU_ROOM=D1102
 CQU_BUILDING=兰园1栋
 SCHEDULE_TIME=12:00            # 每日抓取时间

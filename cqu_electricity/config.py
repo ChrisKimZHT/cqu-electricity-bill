@@ -12,6 +12,9 @@ import re
 from .models import DEFAULT_ELECTRICITY_PRICE
 
 
+FEE_ITEM_IDS = {"huxi": "448", "shapingba": "449"}
+
+
 class ConfigError(ValueError):
     """环境变量缺失或格式不正确。"""
 
@@ -88,6 +91,7 @@ def _email_schedule(raw: str) -> str:
 
 @dataclass(frozen=True, slots=True)
 class Settings:
+    campus: str
     room: str
     building: str | None
     schedule_time: str
@@ -107,12 +111,14 @@ class Settings:
     smtp_starttls: bool
     smtp_timeout: int
     email_subject_prefix: str
-    electricity_url: str
-    fee_item_id: str
     synjones_auth: str
     electricity_price: Decimal = DEFAULT_ELECTRICITY_PRICE
     balance_warning_enabled: bool = False
     balance_warning_threshold: Decimal = Decimal("10")
+
+    @property
+    def fee_item_id(self) -> str:
+        return FEE_ITEM_IDS[self.campus]
 
     @classmethod
     def from_env(cls, env_file: str | Path = ".env") -> "Settings":
@@ -129,7 +135,12 @@ class Settings:
         except ZoneInfoNotFoundError as exc:
             raise ConfigError(f"未知时区 TIMEZONE={timezone_name!r}") from exc
 
+        campus = os.getenv("CQU_CAMPUS", "huxi").strip().lower()
+        if campus not in FEE_ITEM_IDS:
+            raise ConfigError("CQU_CAMPUS 必须是 huxi 或 shapingba")
+
         return cls(
+            campus=campus,
             room=_required("CQU_ROOM").upper(),
             building=os.getenv("CQU_BUILDING", "").strip() or None,
             schedule_time=_schedule_time(
@@ -164,11 +175,6 @@ class Settings:
             email_subject_prefix=os.getenv(
                 "EMAIL_SUBJECT_PREFIX", "电费监控"
             ).strip(),
-            electricity_url=os.getenv(
-                "ELECTRICITY_URL",
-                "http://payment.cqu.edu.cn/charge-app/#/pays?id=448",
-            ).strip(),
-            fee_item_id=os.getenv("FEE_ITEM_ID", "448").strip(),
             synjones_auth=_required("SYNJONES_AUTH"),
             electricity_price=_electricity_price(),
             balance_warning_enabled=_boolean("BALANCE_WARNING_ENABLED", False),

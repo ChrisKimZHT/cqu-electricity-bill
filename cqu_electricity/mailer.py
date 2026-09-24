@@ -42,6 +42,32 @@ def _message(settings: Settings, reading: MeterReading, chart_path: Path) -> Ema
     total_balance = f"{reading.total_balance_yuan(settings.electricity_price):.2f}"
     subject = f"[{settings.email_subject_prefix}] {reading.room} 余额 {total_balance} 元"
     captured_at = reading.captured_at.strftime("%Y-%m-%d %H:%M:%S %Z")
+    cash_label = "现金余额" if reading.subsidy_balance_yuan is not None else "真实余额"
+    chart_title = (
+        "最近14天用电情况（余额估算）"
+        if reading.subsidy_balance_yuan is not None and reading.unit_price_yuan_per_kwh is not None
+        else "最近14天用电情况" if reading.meter_reading_kwh is not None else "最近14天电费余额"
+    )
+    meter_row = (
+        f'<tr><td style="padding:13px 16px;background:#f8fafc;color:#64748b;">电表累计读数</td>'
+        f'<td style="padding:13px 16px;font-weight:600;">{safe(reading.meter_reading_kwh)} 度</td></tr>'
+        if reading.meter_reading_kwh is not None else ""
+    )
+    subsidy_row = (
+        f'<tr><td style="padding:13px 16px;background:#f8fafc;color:#64748b;">剩余电补助</td>'
+        f'<td style="padding:13px 16px;font-weight:600;">{safe(reading.subsidy_kwh)} 度</td></tr>'
+        if reading.subsidy_kwh is not None else ""
+    )
+    subsidy_balance_row = (
+        f'<tr><td style="padding:13px 16px;background:#f8fafc;color:#64748b;">补贴余额</td>'
+        f'<td style="padding:13px 16px;font-weight:600;">{safe(reading.subsidy_balance_yuan)} 元</td></tr>'
+        if reading.subsidy_balance_yuan is not None else ""
+    )
+    address_row = (
+        f'<tr><td style="padding:13px 16px;background:#f8fafc;color:#64748b;">电表地址</td>'
+        f'<td style="padding:13px 16px;font-weight:600;">{safe(reading.meter_address)}</td></tr>'
+        if reading.meter_address else ""
+    )
     html_body = f"""\
 <!doctype html>
 <html lang="zh-CN">
@@ -85,29 +111,21 @@ def _message(settings: Settings, reading: MeterReading, chart_path: Path) -> Ema
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
                        style="border-collapse:separate;border-spacing:0;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;font-size:14px;">
                   <tr>
-                    <td style="padding:13px 16px;background:#f8fafc;color:#64748b;border-bottom:1px solid #e5e7eb;">真实余额</td>
+                    <td style="padding:13px 16px;background:#f8fafc;color:#64748b;border-bottom:1px solid #e5e7eb;">{cash_label}</td>
                     <td style="padding:13px 16px;font-weight:600;border-bottom:1px solid #e5e7eb;">{safe(reading.balance_yuan)} 元</td>
                   </tr>
-                  <tr>
-                    <td style="width:42%;padding:13px 16px;background:#f8fafc;color:#64748b;border-bottom:1px solid #e5e7eb;">电表累计读数</td>
-                    <td style="padding:13px 16px;font-weight:600;border-bottom:1px solid #e5e7eb;">{safe(reading.meter_reading_kwh)} 度</td>
-                  </tr>
-                  <tr>
-                    <td style="padding:13px 16px;background:#f8fafc;color:#64748b;border-bottom:1px solid #e5e7eb;">剩余电补助</td>
-                    <td style="padding:13px 16px;font-weight:600;border-bottom:1px solid #e5e7eb;">{safe(reading.subsidy_kwh)} 度</td>
-                  </tr>
-                  <tr>
-                    <td style="padding:13px 16px;background:#f8fafc;color:#64748b;">电表地址</td>
-                    <td style="padding:13px 16px;font-weight:600;">{safe(reading.meter_address)}</td>
-                  </tr>
+                  {meter_row}
+                  {subsidy_row}
+                  {subsidy_balance_row}
+                  {address_row}
                 </table>
               </td>
             </tr>
             <tr>
               <td style="padding:22px 30px 30px;">
-                <div style="margin-bottom:12px;font-size:17px;font-weight:700;color:#111827;">最近 14 天用电情况</div>
+                <div style="margin-bottom:12px;font-size:17px;font-weight:700;color:#111827;">{chart_title}</div>
                 <div style="padding:10px;background:#ffffff;border:1px solid #e5e7eb;border-radius:10px;">
-                  <img src="data:image/png;base64,{image_base64}" alt="最近14天用电情况"
+                  <img src="data:image/png;base64,{image_base64}" alt="{chart_title}"
                        style="display:block;width:100%;max-width:100%;height:auto;border:0;" />
                 </div>
               </td>
@@ -130,11 +148,12 @@ def _message(settings: Settings, reading: MeterReading, chart_path: Path) -> Ema
         f"房间：{reading.room}\n"
         f"楼栋：{reading.building}\n"
         f"余额：{total_balance} 元\n"
-        f"真实余额：{reading.balance_yuan} 元\n"
-        f"电表累计读数：{reading.meter_reading_kwh} 度\n"
-        f"剩余电补助：{reading.subsidy_kwh if reading.subsidy_kwh is not None else '—'} 度\n"
-        f"电表地址：{reading.meter_address or '—'}\n"
-        "最近14天图表已使用 Base64 内嵌在 HTML 邮件中。"
+        f"{cash_label}：{reading.balance_yuan} 元\n"
+        + (f"电表累计读数：{reading.meter_reading_kwh} 度\n" if reading.meter_reading_kwh is not None else "")
+        + (f"剩余电补助：{reading.subsidy_kwh} 度\n" if reading.subsidy_kwh is not None else "")
+        + (f"补贴余额：{reading.subsidy_balance_yuan} 元\n" if reading.subsidy_balance_yuan is not None else "")
+        + (f"电表地址：{reading.meter_address}\n" if reading.meter_address else "")
+        + "最近14天图表已使用 Base64 内嵌在 HTML 邮件中。"
     )
 
     message = EmailMessage()
