@@ -17,13 +17,13 @@ RUN apt-get update \
 WORKDIR /app
 
 COPY requirements.txt ./
-RUN python -m pip install --no-cache-dir -r requirements.txt
+RUN python -m pip install --no-cache-dir --no-compile -r requirements.txt
 
 COPY cqu_electricity ./cqu_electricity
 
 RUN useradd --create-home --uid 10001 appuser \
     && mkdir -p /app/.cache/matplotlib /data \
-    && chown -R appuser:appuser /app /data
+    && chown appuser:appuser /app/.cache/matplotlib /data
 
 USER appuser
 
